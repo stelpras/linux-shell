@@ -27,3 +27,5 @@ Redirection.o: Redirection.cpp
 # clean house
 clean:
 	rm -f $(OBJS) $(OUT)
+	rm -f build.log commands.txt test_mysh_run.log
+	rm -rf mysh_test_dir
