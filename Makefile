@@ -29,3 +29,4 @@ clean:
 	rm -f $(OBJS) $(OUT)
 	rm -f build.log commands.txt test_mysh_run.log
 	rm -rf mysh_test_dir
+	rm -f valgrind-mysh.log

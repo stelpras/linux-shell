@@ -6,7 +6,26 @@ Stylianos Prasianakis
 
 This is a Unix shell I built in C++ from scratch, sitting directly on top of POSIX system calls like fork, execvp, dup2, kill and glob. It runs commands, handles input/output redirection, supports background processes, catches signals, keeps a command history, lets you define aliases, expands wildcards, and substitutes environment variables.
 
-## What it can do
+## Compilation & Execution
+
+```
+make
+./mysh
+```
+
+Or do both at once:
+
+```
+make run
+```
+
+To clean up the build:
+
+```
+make clean
+```
+
+## Features
 
 Every command you type eventually gets run through execvp inside a forked child process, which is the standard fork/exec model most shells use under the hood.
 
@@ -26,26 +45,7 @@ Environment variables written as `${VAR}` get replaced with their actual value b
 
 There are also a few built-ins: `cd`, `exit`, `history`, and the alias commands. And you can put more than one command on a line separated by `;`, they'll run one after another.
 
-## Build and run
-
-```
-make
-./mysh
-```
-
-Or do both at once:
-
-```
-make run
-```
-
-To clean up the build:
-
-```
-make clean
-```
-
-## How it's actually implemented
+## Architecture & Implementation
 
 Each line typed in gets split first on `;`, then on whitespace, giving a list of tokens. That token list gets checked against the built-ins (cd, history, alias commands, exit) before falling back to execvp in a forked child if it's none of those.
 
@@ -59,17 +59,17 @@ Wildcard expansion runs every token through glob(). If there's no `*` or `?` in 
 
 History is just a fixed-size array of 20 strings with a wraparound index, so the 21st command overwrites the first one.
 
-## What doesn't work yet
+## Known Limitations
 
 Pipes aren't implemented at all.
 
 Ctrl+Z, which sends SIGTSTP, isn't handled either, so there's no process suspension. Ctrl+C does work though, and gets forwarded properly to whatever's running in the foreground.
 
-## Requirements
+## Prerequisites
 
 Needs Linux, since it relies on POSIX APIs (fork, execvp, dup2, kill, glob, chdir), and g++ with C++14 support.
 
-## Testing
+## Automated Testing
 
 There's a test script, test_mysh.sh, that builds the shell and feeds it a sequence of commands through stdin, the same way you'd type them at the prompt, then checks the output against what it should be. It also checks the actual files the shell should have created or modified on disk, not just what got printed. Run it with:
 
@@ -82,7 +82,7 @@ It runs from inside the project folder and creates its own subfolder to work in,
 
 Signal handling is the one thing it doesn't cover automatically, since piping commands through stdin isn't really the same as pressing Ctrl+C in an interactive terminal, and I'd rather not fake it. If you want to check that part yourself, run `sleep 30` inside mysh and press Ctrl+C, it should kill the sleep and give you the prompt back right away.
 
-### The test scenario, worked by hand
+### Manual Test Scenario
 
 I ran this whole sequence against the actual compiled shell to make sure the outputs below are correct and not just what I assumed would happen. Along the way I ran into an actual bug in the history feature, which is documented at the end of this section.
 
@@ -116,7 +116,7 @@ At this point, running `history` lists every command typed so far, numbered star
 
 Running `history 2` re-executes whatever command was stored at index 2, which in this sequence was `echo Hello ${NAME}`, so it prints `Hello World` again.
 
-### A quirk `history <n>` has
+### Known Bug: History Re-execution
 
 Re-running a history entry that contains an environment variable actually corrupts that entry afterwards. The code substitutes the variable directly into the stored history string in place, and then tokenizes that same string with strtok, which replaces the spaces with null characters rather than leaving them alone. So after running `history 2` above, if you dump the history again, index 2 no longer reads as `echo Hello ${NAME}` — the spaces have been silently replaced with null bytes, which usually just shows up as the words running together or as odd invisible characters depending on your terminal. It still works the first time you re-run it, the corruption only shows up afterwards if you look at the history again or try to re-run that same entry a second time.
 

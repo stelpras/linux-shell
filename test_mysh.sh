@@ -158,6 +158,38 @@ echo "environment variables, which can replace the spaces in that entry with nul
 echo "bytes. Look at index 2 in the history dump in $LOG to see it — this is a"
 echo "pre-existing behavior of the code, not something this script is trying to fix."
 
+# --- valgrind memory check ---------------------------------------------------
+
+echo
+echo "== Valgrind memory check =="
+if command -v valgrind > /dev/null 2>&1; then
+    VALGRIND_LOG="valgrind-mysh.log"
+    echo -e "echo test\nexit" | valgrind --leak-check=full --log-file="$VALGRIND_LOG" \
+        "$BIN" > /dev/null 2>&1
+
+    if [ -f "$VALGRIND_LOG" ]; then
+        if grep -q "All heap blocks were freed" "$VALGRIND_LOG" || grep -q "definitely lost: 0 bytes" "$VALGRIND_LOG"; then
+            echo "  [PASS] valgrind: no memory leaks"
+            PASS=$((PASS + 1))
+        else
+            echo "  [FAIL] valgrind: no memory leaks"
+            FAIL=$((FAIL + 1))
+        fi
+        if grep -q "ERROR SUMMARY: 0 errors" "$VALGRIND_LOG"; then
+            echo "  [PASS] valgrind: 0 errors"
+            PASS=$((PASS + 1))
+        else
+            echo "  [FAIL] valgrind: 0 errors"
+            FAIL=$((FAIL + 1))
+        fi
+        echo "  (full valgrind output saved to $VALGRIND_LOG)"
+    else
+        echo "  [SKIP] valgrind log not created"
+    fi
+else
+    echo "  [SKIP] valgrind not installed"
+fi
+
 # --- summary ---------------------------------------------------------------
 
 echo
