@@ -1,58 +1,66 @@
 # mysh — A Simple Linux Shell in C++
 
-A custom Unix shell implemented in C++ that supports command execution, I/O redirection, background processes, signal handling, command history, aliases, wildcard expansion, and environment variable substitution — built directly on top of POSIX system calls (`fork`, `execvp`, `dup2`, `kill`, `glob`).
+This is a Unix shell I built in C++ from scratch, sitting directly on top of POSIX system calls like fork, execvp, dup2, kill and glob. It runs commands, handles input/output redirection, supports background processes, catches signals, keeps a command history, lets you define aliases, expands wildcards, and substitutes environment variables.
 
-## Features
+## What it can do
 
-- **Command execution** — every command is run in a child process via `execvp`, following the standard `fork`/`exec` model.
-- **I/O redirection** — `>`, `>>`, `<`, `<<` are implemented using `open` and `dup2` to redirect file descriptors before the command runs.
-- **Background processes** — appending `&` (with a preceding space) to a command runs it without blocking the shell, e.g. `./count1 &`.
-- **Signal handling** — `Ctrl+C` (`SIGINT`) is caught by the parent and forwarded to the running child process via `kill`; the parent restores default signal behavior once the child exits.
-- **Command history** — the last 20 commands are stored in a fixed-size buffer.
-  - `history` — lists the last 20 commands
-  - `history <n>` — re-executes command number `n` (indexing starts at 0)
-- **Aliases** — backed by a `std::map<string, string>`.
-  - `createalias <name> "<command>"` — defines an alias
-  - `destroyalias <name>` — removes an alias
-- **Wildcard expansion** — `*` and `?` patterns are expanded using the POSIX `glob.h` header.
-- **Environment variable substitution** — tokens in the form `${VAR}` are replaced with their environment value before execution.
-- **Built-in commands** — `cd`, `exit`, `history`, alias management.
-- **Multiple commands per line** — commands separated by `;` are parsed and executed sequentially.
+Every command you type eventually gets run through execvp inside a forked child process, which is the standard fork/exec model most shells use under the hood.
 
-## Build & Run
+Redirection works for all four operators, `>`, `>>`, `<` and `<<`. These are implemented with open and dup2, redirecting file descriptors before the command actually runs.
 
-```bash
-make        # builds the mysh executable
-./mysh      # run the shell
+You can run something in the background by adding `&` after it, as long as there's a space before it, like `./count1 &`. The shell won't wait for it to finish and gives you the prompt back right away.
+
+Ctrl+C sends SIGINT, which the parent process catches and forwards to whichever child is currently running, using kill. Once the child exits, signal handling goes back to default.
+
+The last 20 commands get stored in a history buffer. Typing `history` lists them, and `history <n>` re-runs whichever command is at that number — numbering starts at 0.
+
+Aliases are backed by a map. `createalias <name> "<command>"` sets one up, and `destroyalias <name>` removes it.
+
+Wildcards (`*` and `?`) get expanded using glob.h.
+
+Environment variables written as `${VAR}` get replaced with their actual value before the command runs.
+
+There are also a few built-ins: `cd`, `exit`, `history`, and the alias commands. And you can put more than one command on a line separated by `;`, they'll run one after another.
+
+## Build and run
+
+```
+make
+./mysh
 ```
 
-or in one step:
+Or do both at once:
 
-```bash
+```
 make run
 ```
 
-To clean build artifacts:
+To clean up the build:
 
-```bash
+```
 make clean
 ```
 
-## Implementation Notes
+## How it's actually implemented
 
-- **Execution model**: input lines are split on `;`, then on whitespace, to produce a token list. Each token list is checked against built-ins (`cd`, `history`, alias commands, `exit`) before falling back to `execvp` in a forked child.
-- **Redirection**: before `execvp` is called in the child, `handleInputRedirection` / `handleOutputRedirection` scan the token list for `<`, `<<`, `>`, `>>`, open the target file with the appropriate flags (`O_TRUNC` vs `O_APPEND` for `>` vs `>>`), and `dup2` the resulting descriptor onto `stdin`/`stdout`.
-- **Signals**: the parent stores the active child's PID; on `SIGINT` it forwards the signal to that PID via `kill`. Once the child is reaped, the parent resets its signal handler to `SIG_DFL`.
-- **Background jobs**: if the last token before the line terminator is `&`, the shell skips `waitpid` and returns control to the prompt immediately.
-- **Wildcards**: each token is passed through `glob()`; if it contains no `*`/`?`, it's passed through unchanged, otherwise it's expanded to the matching filenames.
-- **History buffer**: a `std::array<std::string, 20>` with a wraparound index — the 21st command overwrites the first.
+Each line typed in gets split first on `;`, then on whitespace, giving a list of tokens. That token list gets checked against the built-ins (cd, history, alias commands, exit) before falling back to execvp in a forked child if it's none of those.
 
-## Known Limitations
+Redirection is handled right before execvp gets called in the child. The functions handleInputRedirection and handleOutputRedirection scan the tokens for `<`, `<<`, `>` and `>>`, open the target file with the right flags (O_TRUNC for `>`, O_APPEND for `>>`), and dup2 the resulting file descriptor onto stdin or stdout.
 
-- **Pipes (`|`) are not implemented.**
-- **`Ctrl+Z` (`SIGTSTP`)** is not handled — process suspension is not supported. `Ctrl+C` (`SIGINT`) works and is forwarded to the foreground child.
+For signals, the parent just keeps track of the active child's PID. When SIGINT comes in, it gets forwarded to that PID with kill. Once the child has been reaped, the parent resets its signal handler back to SIG_DFL.
+
+Background jobs are detected by checking if the last token before the line ends is `&`. If so, the shell skips waitpid entirely and just returns control to the prompt.
+
+Wildcard expansion runs every token through glob(). If there's no `*` or `?` in it, it just passes through unchanged, otherwise it gets expanded into the matching filenames.
+
+History is just a fixed-size array of 20 strings with a wraparound index, so the 21st command overwrites the first one.
+
+## What doesn't work yet
+
+Pipes aren't implemented at all.
+
+Ctrl+Z, which sends SIGTSTP, isn't handled either, so there's no process suspension. Ctrl+C does work though, and gets forwarded properly to whatever's running in the foreground.
 
 ## Requirements
 
-- Linux (uses POSIX APIs: `fork`, `execvp`, `dup2`, `kill`, `glob`, `chdir`)
-- `g++` with C++14 support
+Needs Linux, since it relies on POSIX APIs (fork, execvp, dup2, kill, glob, chdir), and g++ with C++14 support.
